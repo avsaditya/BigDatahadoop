@@ -1,0 +1,96 @@
+
+// 1. Load data and create Spark data frame
+// Create Dataframe
+
+val lines = sc.textFile("P1_Bank_DataSet.txt")
+val bank = lines.map(x => x.split(","))
+
+// Define Class for the schema
+case class Bank(age:Int, job:String, marital:String, education:String, default:String, balance:Int, housing:String, loan:String, contact:String, day:Int, month:String, duration:Int, campaign:Int, pdays:Int, previous:Int, poutcome:String, y:String)
+				
+val bankrdd = bank.map( x => Bank(x(0).toInt,
+x(1).replaceAll("\"",""),
+x(2).replaceAll("\"",""), 
+x(3).replaceAll("\"",""),
+x(4).replaceAll("\"",""),
+x(5).toInt,
+x(6).replaceAll("\"",""),
+x(7).replaceAll("\"",""),
+x(8).replaceAll("\"",""),
+x(9).toInt,
+x(10).replaceAll("\"",""),
+x(11).toInt,
+x(12).toInt,
+x(13).toInt,
+x(14).toInt,
+x(15).replaceAll("\"",""),
+x(16).replaceAll("\"","")
+)
+)
+
+val bankDF = bankrdd.toDF()
+bankDF.printSchema()
+bankDF.show()
+bankDF.registerTempTable("bankAVS")
+
+
+// 2. Give marketing success rate. (No. of people subscribed / total no. of entries)
+// Marketing Success Rate ((No. of people subscribed / total no. of entries))
+
+val success = sqlContext.sql("select (a.subscribed/b.total)*100 as success_percent from (select count(*) as subscribed from bankAVS where y='yes') a,(select count(*) as total from bankAVS) b").show()
+
+// 2a Give marketing failure rate
+
+val failure = sqlContext.sql("select (a.not_subscribed/b.total)*100 as failure_percent from (select count(*) as not_subscribed from bankAVS where y='no') a,(select count(*) as total from bankAVS) b").show()
+
+// 3. Maximum, Mean, and Minimum age of average targeted customer
+
+bankDF.select(max($"age")).show()
+bankDF.select(min($"age")).show()
+bankDF.select(avg($"age")).show()
+
+// 4. Check quality of customers by checking average balance, median balance of customers
+
+bankDF.select(avg($"balance")).show()
+val median = sqlContext.sql("SELECT percentile_approx(balance, 0.5) from bankAVS").show()
+
+// 5. Check if age matters in marketing subscription for deposit
+
+val age = sqlContext.sql("select age, count(*) as number from bankAVS where y='yes' group by age order by number desc ").show()
+
+// 6. Check if marital status mattered for subscription to deposit
+
+val marital = sqlContext.sql("select marital, count(*) as number from bankAVS where y='yes' group by marital order by number desc ").show()
+
+// 7. Check if age and marital status together mattered for subscription to deposit scheme
+
+val age_marital = sqlContext.sql("select age, marital, count(*) as number from bankAVS where y='yes' group by age,marital order by number desc ").show()
+
+// 8. Do feature engineering for column—age and find right age effect on campaign
+
+// Import necessary libraries
+import scala.reflect.runtime.universe
+import org.apache.spark.SparkConf
+import org.apache.spark.SparkContext
+import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.SQLContext
+import org.apache.spark.sql.functions.mean
+
+// Defining a new UDF with which we will generate new features.We divide the age groups into 4 categories.
+val ageRDD = sqlContext.udf.register("ageRDD",(age:Int) => {
+if (age < 20)
+"Teen"
+else if (age > 20 && age <= 32)
+"Young"
+else if (age > 33 && age <= 55)
+"Middle Aged"
+else
+"Old"
+})
+
+// Replacing old “age” column with new “age” column
+val banknewDF = bankDF.withColumn("age",ageRDD(bankDF("age")))
+banknewDF.registerTempTable("bank_new")
+
+// Running a query to see the age group which subscribed the most.
+val age_target = sqlContext.sql("select age, count(*) as number from bank_new where y='yes' group by age order by number desc ").show()
