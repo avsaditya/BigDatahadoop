@@ -1,0 +1,33 @@
+// Data Pre-processing
+// Load data in spark.
+val input = sc.textFile("P2_DataSet")
+val data_split = input.map(x => x.split(","))
+
+// create case class.
+case class loudacre_case(date_time:String, place:String, extra:String, latitude:Double, longitude:Double)
+
+val loudacrerdd = data_split.map(x => loudacre_case(x(0), x(1), x(2), x(3).toDouble, x(4).toDouble))
+
+// Create Dataframe.
+val loudacreDF = loudacrerdd.toDF()
+
+loudacreDF.printSchema()
+loudacreDF.registerTempTable("loudacreAVS")
+
+// Working with K-Means Clustering In Spark
+// Import required libraries.
+import org.apache.spark.mllib.linalg.Vectors
+import org.apache.spark.mllib.clustering.KMeans
+import org.apache.spark.sql.functions._
+
+// Parse data (convert string RDD to vector RDD).
+val vectors = loudacreDF.rdd.map(r => Vectors.dense( r.getDouble(3), r.getDouble(4)))
+
+val numClusters = 3
+val numIterations = 20
+
+// Train the Model.
+val kmeansModel = KMeans.train(vectors, numClusters, numIterations)
+
+// Check Cluster Centers.
+kmeansModel.clusterCenters.foreach(println)

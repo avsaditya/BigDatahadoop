@@ -1,0 +1,5 @@
+Solutions
+This is the required information of latitude and longitude and the three clusters of users found with k-means algorithm is as below:
+[34.52886579878435,-116.34531611913462]
+[0.0,0.0]
+[39.57392651941122,-121.24864484001667]
